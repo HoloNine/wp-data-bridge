@@ -557,66 +557,79 @@
 			const container = $("#check-content");
 			let html = `
 				<div class="file-check-summary">
-					<div class="check-result ${data.valid ? 'success' : 'error'}">
-						<span class="dashicons ${data.valid ? 'dashicons-yes-alt' : 'dashicons-dismiss'}"></span>
+					<div class="check-result ${data.valid ? "success" : "error"}">
+						<span class="dashicons ${
+							data.valid ? "dashicons-yes-alt" : "dashicons-dismiss"
+						}"></span>
 						${data.message}
 					</div>
 					<div class="file-info">
 						<p><strong>Import Type:</strong> ${data.import_type}</p>
 						<p><strong>Total Records:</strong> ${this.formatNumber(data.total_records)}</p>
 						<p><strong>File Size:</strong> ${data.file_size}</p>
-						<p><strong>Headers:</strong> ${data.headers.join(", ")}</p>
+						<p><strong>Headers:</strong> ${data.headers && Array.isArray(data.headers) ? data.headers.join(", ") : "None"}</p>
 					</div>
 				</div>
 			`;
 
 			if (data.analysis) {
 				html += '<div class="file-analysis">';
-				html += '<h4>File Analysis</h4>';
-				
-				if (data.analysis.has_warnings && data.analysis.warnings.length > 0) {
+				html += "<h4>File Analysis</h4>";
+
+				if (data.analysis.has_warnings && data.analysis.warnings && Array.isArray(data.analysis.warnings) && data.analysis.warnings.length > 0) {
 					html += '<div class="analysis-warnings">';
-					html += '<h5><span class="dashicons dashicons-warning"></span> Warnings</h5>';
-					html += '<ul>';
-					data.analysis.warnings.forEach(warning => {
+					html +=
+						'<h5><span class="dashicons dashicons-warning"></span> Warnings</h5>';
+					html += "<ul>";
+					data.analysis.warnings.forEach((warning) => {
 						html += `<li>${warning}</li>`;
 					});
-					html += '</ul>';
-					html += '</div>';
+					html += "</ul>";
+					html += "</div>";
 				}
 
 				if (data.analysis.summary) {
 					html += '<div class="analysis-summary">';
-					html += '<h5>Content Summary</h5>';
-					
+					html += "<h5>Content Summary</h5>";
+
 					if (data.analysis.summary.post_types) {
 						html += '<div class="summary-item">';
-						html += '<strong>Post Types:</strong><br>';
-						if (data.analysis.summary.post_types.existing.length > 0) {
-							html += '<span class="existing-types">✓ ' + data.analysis.summary.post_types.existing.join(', ') + '</span><br>';
+						html += "<strong>Post Types:</strong><br>";
+						if (data.analysis.summary.post_types.existing && Array.isArray(data.analysis.summary.post_types.existing) && data.analysis.summary.post_types.existing.length > 0) {
+							html +=
+								'<span class="existing-types">✓ ' +
+								data.analysis.summary.post_types.existing.join(", ") +
+								"</span><br>";
 						}
-						if (data.analysis.summary.post_types.missing.length > 0) {
-							html += '<span class="missing-types">✗ ' + data.analysis.summary.post_types.missing.join(', ') + ' (missing)</span>';
+						if (data.analysis.summary.post_types.missing && Array.isArray(data.analysis.summary.post_types.missing) && data.analysis.summary.post_types.missing.length > 0) {
+							html +=
+								'<span class="missing-types">✗ ' +
+								data.analysis.summary.post_types.missing.join(", ") +
+								" (missing)</span>";
 						}
-						html += '</div>';
+						html += "</div>";
 					}
 
-					if (data.analysis.summary.post_statuses) {
+					if (data.analysis.summary.post_statuses && Array.isArray(data.analysis.summary.post_statuses) && data.analysis.summary.post_statuses.length > 0) {
 						html += '<div class="summary-item">';
-						html += '<strong>Post Statuses:</strong> ' + data.analysis.summary.post_statuses.join(', ');
-						html += '</div>';
+						html +=
+							"<strong>Post Statuses:</strong> " +
+							data.analysis.summary.post_statuses.join(", ");
+						html += "</div>";
 					}
 
-					if (data.analysis.summary.user_roles) {
+					if (data.analysis.summary.user_roles && Array.isArray(data.analysis.summary.user_roles) && data.analysis.summary.user_roles.length > 0) {
 						html += '<div class="summary-item">';
-						html += '<strong>User Roles:</strong> ' + data.analysis.summary.user_roles.join(', ');
-						html += '</div>';
+						html +=
+							"<strong>User Roles:</strong> " +
+							data.analysis.summary.user_roles.join(", ");
+						html += "</div>";
 					}
 
-					html += '</div>';
+					html += "</div>";
 				}
 
-				html += '</div>';
+				html += "</div>";
 			}
 
 			container.html(html);
