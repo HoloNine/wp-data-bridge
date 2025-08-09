@@ -293,7 +293,6 @@
 }
 
 @media (max-width: 782px) {
-
 	.stats-grid {
 		grid-template-columns: repeat(2, 1fr);
 	}
@@ -317,7 +316,6 @@
 }
 
 @media (max-width: 480px) {
-
 	.stats-grid {
 		grid-template-columns: 1fr;
 	}
@@ -333,7 +331,6 @@
 }
 
 @keyframes fadeIn {
-
 	from {
 		opacity: 0;
 		transform: translateY(10px);
@@ -485,6 +482,25 @@
 }
 
 .missing-types {
+	color: #721c24;
+	font-weight: 500;
+}
+
+/* Import Blocked Notice */
+.import-blocked-notice {
+	margin-top: 20px;
+}
+
+.import-blocked-notice .notice {
+	margin: 0;
+	padding: 12px 15px;
+	border-left: 4px solid #dc3232;
+	background: #fef7f7;
+	border-radius: 4px;
+}
+
+.import-blocked-notice .notice p {
+	margin: 0;
 	color: #721c24;
 	font-weight: 500;
 }

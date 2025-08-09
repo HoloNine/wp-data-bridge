@@ -460,7 +460,6 @@
 				success: (response) => {
 					if (response.success) {
 						this.showFileCheckResults(response.data);
-						$("#start-import-btn").prop("disabled", false);
 					} else {
 						this.showImportError(response.data || "File check failed");
 					}
@@ -567,16 +566,35 @@
 						<p><strong>Import Type:</strong> ${data.import_type}</p>
 						<p><strong>Total Records:</strong> ${this.formatNumber(data.total_records)}</p>
 						<p><strong>File Size:</strong> ${data.file_size}</p>
-						<p><strong>Headers:</strong> ${data.headers && Array.isArray(data.headers) ? data.headers.join(", ") : "None"}</p>
+						<p><strong>Headers:</strong> ${
+							data.headers && Array.isArray(data.headers)
+								? data.headers.join(", ")
+								: "None"
+						}</p>
 					</div>
 				</div>
 			`;
+
+			// Check if there are missing post types that would prevent import
+			let hasMissingPostTypes = false;
+			if (data.analysis && data.analysis.summary && data.analysis.summary.post_types) {
+				if (data.analysis.summary.post_types.missing && 
+					Array.isArray(data.analysis.summary.post_types.missing) && 
+					data.analysis.summary.post_types.missing.length > 0) {
+					hasMissingPostTypes = true;
+				}
+			}
 
 			if (data.analysis) {
 				html += '<div class="file-analysis">';
 				html += "<h4>File Analysis</h4>";
 
-				if (data.analysis.has_warnings && data.analysis.warnings && Array.isArray(data.analysis.warnings) && data.analysis.warnings.length > 0) {
+				if (
+					data.analysis.has_warnings &&
+					data.analysis.warnings &&
+					Array.isArray(data.analysis.warnings) &&
+					data.analysis.warnings.length > 0
+				) {
 					html += '<div class="analysis-warnings">';
 					html +=
 						'<h5><span class="dashicons dashicons-warning"></span> Warnings</h5>';
@@ -595,13 +613,21 @@
 					if (data.analysis.summary.post_types) {
 						html += '<div class="summary-item">';
 						html += "<strong>Post Types:</strong><br>";
-						if (data.analysis.summary.post_types.existing && Array.isArray(data.analysis.summary.post_types.existing) && data.analysis.summary.post_types.existing.length > 0) {
+						if (
+							data.analysis.summary.post_types.existing &&
+							Array.isArray(data.analysis.summary.post_types.existing) &&
+							data.analysis.summary.post_types.existing.length > 0
+						) {
 							html +=
 								'<span class="existing-types">✓ ' +
 								data.analysis.summary.post_types.existing.join(", ") +
 								"</span><br>";
 						}
-						if (data.analysis.summary.post_types.missing && Array.isArray(data.analysis.summary.post_types.missing) && data.analysis.summary.post_types.missing.length > 0) {
+						if (
+							data.analysis.summary.post_types.missing &&
+							Array.isArray(data.analysis.summary.post_types.missing) &&
+							data.analysis.summary.post_types.missing.length > 0
+						) {
 							html +=
 								'<span class="missing-types">✗ ' +
 								data.analysis.summary.post_types.missing.join(", ") +
@@ -610,7 +636,11 @@
 						html += "</div>";
 					}
 
-					if (data.analysis.summary.post_statuses && Array.isArray(data.analysis.summary.post_statuses) && data.analysis.summary.post_statuses.length > 0) {
+					if (
+						data.analysis.summary.post_statuses &&
+						Array.isArray(data.analysis.summary.post_statuses) &&
+						data.analysis.summary.post_statuses.length > 0
+					) {
 						html += '<div class="summary-item">';
 						html +=
 							"<strong>Post Statuses:</strong> " +
@@ -618,7 +648,11 @@
 						html += "</div>";
 					}
 
-					if (data.analysis.summary.user_roles && Array.isArray(data.analysis.summary.user_roles) && data.analysis.summary.user_roles.length > 0) {
+					if (
+						data.analysis.summary.user_roles &&
+						Array.isArray(data.analysis.summary.user_roles) &&
+						data.analysis.summary.user_roles.length > 0
+					) {
 						html += '<div class="summary-item">';
 						html +=
 							"<strong>User Roles:</strong> " +
@@ -632,8 +666,24 @@
 				html += "</div>";
 			}
 
+			// Add import blocking notice if there are missing post types
+			if (hasMissingPostTypes) {
+				html += '<div class="import-blocked-notice">';
+				html += '<div class="notice notice-error">';
+				html += '<p><strong>Import Blocked:</strong> The import cannot proceed because required post types are missing. Please install the necessary plugins or themes before importing.</p>';
+				html += '</div>';
+				html += '</div>';
+			}
+
 			container.html(html);
 			$("#file-check-results").show();
+
+			// Enable or disable the import button based on missing post types
+			if (data.valid && !hasMissingPostTypes) {
+				$("#start-import-btn").prop("disabled", false);
+			} else {
+				$("#start-import-btn").prop("disabled", true);
+			}
 		},
 
 		showImportProgress() {
