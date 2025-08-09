@@ -426,6 +426,8 @@ class WP_Data_Bridge_Importer {
             $categories = explode(', ', $row[$column_map['Categories']]);
             $category_ids = [];
             
+            error_log("WP Data Bridge: Processing categories for post {$post_id}: " . $row[$column_map['Categories']]);
+            
             foreach ($categories as $category_name) {
                 $category_name = trim($category_name);
                 if (empty($category_name)) continue;
@@ -441,15 +443,26 @@ class WP_Data_Bridge_Importer {
                     $new_category = wp_insert_term($category_name, 'category');
                     if (!is_wp_error($new_category)) {
                         $category_ids[] = $new_category['term_id'];
+                        error_log("WP Data Bridge: Created category '{$category_name}' with ID {$new_category['term_id']}");
+                    } else {
+                        error_log("WP Data Bridge: Failed to create category '{$category_name}': " . $new_category->get_error_message());
                     }
                 } else {
                     $category_ids[] = $category->term_id;
+                    error_log("WP Data Bridge: Using existing category '{$category_name}' with ID {$category->term_id}");
                 }
             }
             
             // Assign categories to post
             if (!empty($category_ids)) {
-                wp_set_post_categories($post_id, $category_ids, false);
+                $result = wp_set_post_categories($post_id, $category_ids, false);
+                if ($result) {
+                    error_log("WP Data Bridge: Assigned categories " . implode(', ', $category_ids) . " to post {$post_id}");
+                } else {
+                    error_log("WP Data Bridge: Failed to assign categories to post {$post_id}");
+                }
+            } else {
+                error_log("WP Data Bridge: No valid category IDs to assign to post {$post_id}");
             }
         }
         
@@ -459,8 +472,15 @@ class WP_Data_Bridge_Importer {
             $tag_names = array_map('trim', $tags);
             $tag_names = array_filter($tag_names); // Remove empty tags
             
+            error_log("WP Data Bridge: Processing tags for post {$post_id}: " . implode(', ', $tag_names));
+            
             if (!empty($tag_names)) {
-                wp_set_post_tags($post_id, $tag_names, false); // wp_set_post_tags handles tag creation automatically
+                $result = wp_set_post_tags($post_id, $tag_names, false); // wp_set_post_tags handles tag creation automatically
+                if ($result !== false) {
+                    error_log("WP Data Bridge: Assigned tags to post {$post_id}");
+                } else {
+                    error_log("WP Data Bridge: Failed to assign tags to post {$post_id}");
+                }
             }
         }
         
