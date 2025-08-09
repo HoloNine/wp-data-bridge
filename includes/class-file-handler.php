@@ -18,8 +18,8 @@ class WP_Data_Bridge_File_Handler {
             throw new Exception(__('File does not exist.', 'wp-data-bridge'));
         }
         
-        $token = $this->generate_download_token($file_path, $filename);
         $expires = time() + $this->download_expiry;
+        $token = $this->generate_download_token($file_path, $filename, $expires);
         
         $url_params = [
             'action' => 'wp_data_bridge_download',
@@ -50,7 +50,7 @@ class WP_Data_Bridge_File_Handler {
         
         $file_path = WP_DATA_BRIDGE_UPLOAD_DIR . $filename;
         
-        if (!$this->verify_download_token($token, $file_path, $filename)) {
+        if (!$this->verify_download_token($token, $file_path, $filename, $expires)) {
             $this->download_error(__('Invalid download token.', 'wp-data-bridge'));
         }
         
@@ -79,7 +79,9 @@ class WP_Data_Bridge_File_Handler {
             $this->readfile_chunked($file_path);
         }
         
-        $this->cleanup_downloaded_file($file_path);
+        // Don't immediately delete file - let scheduled cleanup handle it
+        // This allows time for debugging and multiple downloads
+        // $this->cleanup_downloaded_file($file_path);
         
         exit;
     }
@@ -112,13 +114,16 @@ class WP_Data_Bridge_File_Handler {
         return true;
     }
     
-    private function generate_download_token(string $file_path, string $filename): string {
-        $data = $file_path . '|' . $filename . '|' . time();
+    private function generate_download_token(string $file_path, string $filename, ?int $timestamp = null): string {
+        if ($timestamp === null) {
+            $timestamp = time();
+        }
+        $data = $file_path . '|' . $filename . '|' . $timestamp;
         return hash_hmac('sha256', $data, $this->secure_key);
     }
     
-    private function verify_download_token(string $token, string $file_path, string $filename): bool {
-        $expected_token = $this->generate_download_token($file_path, $filename);
+    private function verify_download_token(string $token, string $file_path, string $filename, int $timestamp): bool {
+        $expected_token = $this->generate_download_token($file_path, $filename, $timestamp);
         return hash_equals($expected_token, $token);
     }
     

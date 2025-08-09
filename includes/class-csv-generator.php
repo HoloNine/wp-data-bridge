@@ -11,9 +11,29 @@ class WP_Data_Bridge_CSV_Generator {
     private $headers_written = false;
     
     public function __construct() {
-        if (!wp_mkdir_p(WP_DATA_BRIDGE_UPLOAD_DIR)) {
-            throw new Exception(__('Could not create upload directory.', 'wp-data-bridge'));
+        // Ensure upload directory exists - use native PHP if wp_mkdir_p fails
+        if (!is_dir(WP_DATA_BRIDGE_UPLOAD_DIR)) {
+            if (function_exists('wp_mkdir_p')) {
+                if (!wp_mkdir_p(WP_DATA_BRIDGE_UPLOAD_DIR)) {
+                    // Fallback to native PHP mkdir
+                    if (!mkdir(WP_DATA_BRIDGE_UPLOAD_DIR, 0755, true)) {
+                        throw new Exception(__('Could not create upload directory.', 'wp-data-bridge'));
+                    }
+                }
+            } else {
+                // WordPress not available, use native PHP mkdir
+                if (!mkdir(WP_DATA_BRIDGE_UPLOAD_DIR, 0755, true)) {
+                    throw new Exception(__('Could not create upload directory.', 'wp-data-bridge'));
+                }
+            }
         }
+        
+        // Check if directory is writable
+        if (!is_writable(WP_DATA_BRIDGE_UPLOAD_DIR)) {
+            throw new Exception(__('Upload directory is not writable.', 'wp-data-bridge'));
+        }
+        
+        // CSV Generator initialized successfully
     }
     
     public function generate_csv(array $data, string $export_type, string $filename = null): string {
@@ -28,10 +48,22 @@ class WP_Data_Bridge_CSV_Generator {
         $file_path = WP_DATA_BRIDGE_UPLOAD_DIR . $filename;
         $this->temp_file_path = $file_path;
         
+        // Prepare file path for CSV generation
+        
         $this->file_handle = fopen($file_path, 'w');
         if (!$this->file_handle) {
-            throw new Exception(__('Could not create CSV file.', 'wp-data-bridge'));
+            $last_error = error_get_last();
+            $error_msg = "Could not create CSV file at: " . $file_path;
+            if ($last_error) {
+                $error_msg .= " - Error: " . $last_error['message'];
+            }
+            $error_msg .= " - Directory writable: " . (is_writable(dirname($file_path)) ? 'YES' : 'NO');
+            $error_msg .= " - File path length: " . strlen($file_path);
+            error_log("WP Data Bridge: " . $error_msg);
+            throw new Exception(__('Could not create CSV file: ', 'wp-data-bridge') . basename($file_path));
         }
+        
+        // CSV file handle created successfully
         
         $this->write_utf8_bom();
         
@@ -43,6 +75,14 @@ class WP_Data_Bridge_CSV_Generator {
                 $this->file_handle = null;
             }
         }
+        
+        // Verify file was created successfully
+        if (!file_exists($file_path)) {
+            throw new Exception(__('CSV file was not created successfully.', 'wp-data-bridge'));
+        }
+        
+        // Clear temp_file_path so destructor doesn't delete the file
+        $this->temp_file_path = null;
         
         return $file_path;
     }
@@ -217,7 +257,8 @@ class WP_Data_Bridge_CSV_Generator {
         
         $this->output_file_in_chunks($file_path);
         
-        $this->cleanup_file($file_path);
+        // Don't immediately delete file - let scheduled cleanup handle it
+        // $this->cleanup_file($file_path);
         
         exit;
     }
@@ -303,6 +344,43 @@ class WP_Data_Bridge_CSV_Generator {
         $estimated_row_size = strlen(serialize($sample_row));
         
         return count($data) * $estimated_row_size * 2;
+    }
+    
+    public function test_csv_generation(): string {
+        // Simple test function to verify CSV generation works
+        $test_data = [
+            [
+                'site_id' => 1,
+                'site_name' => 'Test Site',
+                'post_id' => 123,
+                'post_title' => 'Test Post',
+                'post_content' => 'This is test content',
+                'post_excerpt' => 'Test excerpt',
+                'post_status' => 'publish',
+                'post_type' => 'post',
+                'post_author_id' => 1,
+                'post_author_name' => 'Test Author',
+                'post_date' => '2025-08-09 13:00:00',
+                'post_modified' => '2025-08-09 13:30:00',
+                'featured_image_id' => '',
+                'featured_image_url' => '',
+                'categories' => 'Test Category',
+                'tags' => 'test, sample',
+                'custom_fields' => '{}',
+                'parent_id' => 0
+            ]
+        ];
+        
+        $test_filename = 'test_export_' . date('Y-m-d_H-i-s') . '.csv';
+        
+        try {
+            $file_path = $this->generate_csv($test_data, 'posts', $test_filename);
+            // Don't cleanup test files so we can verify they exist
+            $this->temp_file_path = null;
+            return "Test CSV generated successfully at: " . $file_path;
+        } catch (Exception $e) {
+            return "Test CSV generation failed: " . $e->getMessage();
+        }
     }
     
     public function __destruct() {
