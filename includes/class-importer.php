@@ -424,13 +424,44 @@ class WP_Data_Bridge_Importer {
         // Import categories
         if (isset($column_map['Categories']) && !empty($row[$column_map['Categories']])) {
             $categories = explode(', ', $row[$column_map['Categories']]);
-            wp_set_post_categories($post_id, $categories, false);
+            $category_ids = [];
+            
+            foreach ($categories as $category_name) {
+                $category_name = trim($category_name);
+                if (empty($category_name)) continue;
+                
+                // Check if category exists
+                $category = get_category_by_slug(sanitize_title($category_name));
+                if (!$category) {
+                    $category = get_term_by('name', $category_name, 'category');
+                }
+                
+                // Create category if it doesn't exist
+                if (!$category) {
+                    $new_category = wp_insert_term($category_name, 'category');
+                    if (!is_wp_error($new_category)) {
+                        $category_ids[] = $new_category['term_id'];
+                    }
+                } else {
+                    $category_ids[] = $category->term_id;
+                }
+            }
+            
+            // Assign categories to post
+            if (!empty($category_ids)) {
+                wp_set_post_categories($post_id, $category_ids, false);
+            }
         }
         
-        // Import tags
+        // Import tags  
         if (isset($column_map['Tags']) && !empty($row[$column_map['Tags']])) {
             $tags = explode(', ', $row[$column_map['Tags']]);
-            wp_set_post_tags($post_id, $tags, false);
+            $tag_names = array_map('trim', $tags);
+            $tag_names = array_filter($tag_names); // Remove empty tags
+            
+            if (!empty($tag_names)) {
+                wp_set_post_tags($post_id, $tag_names, false); // wp_set_post_tags handles tag creation automatically
+            }
         }
         
         // Import custom fields
