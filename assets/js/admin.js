@@ -577,10 +577,16 @@
 
 			// Check if there are missing post types that would prevent import
 			let hasMissingPostTypes = false;
-			if (data.analysis && data.analysis.summary && data.analysis.summary.post_types) {
-				if (data.analysis.summary.post_types.missing && 
-					Array.isArray(data.analysis.summary.post_types.missing) && 
-					data.analysis.summary.post_types.missing.length > 0) {
+			if (
+				data.analysis &&
+				data.analysis.summary &&
+				data.analysis.summary.post_types
+			) {
+				if (
+					data.analysis.summary.post_types.missing &&
+					Array.isArray(data.analysis.summary.post_types.missing) &&
+					data.analysis.summary.post_types.missing.length > 0
+				) {
 					hasMissingPostTypes = true;
 				}
 			}
@@ -670,9 +676,10 @@
 			if (hasMissingPostTypes) {
 				html += '<div class="import-blocked-notice">';
 				html += '<div class="notice notice-error">';
-				html += '<p><strong>Import Blocked:</strong> The import cannot proceed because required post types are missing. Please install the necessary plugins or themes before importing.</p>';
-				html += '</div>';
-				html += '</div>';
+				html +=
+					"<p><strong>Import Blocked:</strong> The import cannot proceed because required post types are missing. Please install the necessary plugins or themes before importing.</p>";
+				html += "</div>";
+				html += "</div>";
 			}
 
 			container.html(html);
