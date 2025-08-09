@@ -9,6 +9,10 @@
 		},
 
 		bindEvents() {
+			// Tab switching
+			$( '.nav-tab' ).on( 'click', this.onTabClick.bind( this ) );
+			
+			// Export events
 			$( '#site_id' ).on( 'change', this.onSiteChange.bind( this ) );
 			$( '#wp-data-bridge-form' ).on(
 				'submit',
@@ -22,6 +26,26 @@
 				'change',
 				this.validateDateRange.bind( this )
 			);
+			
+			// Import events
+			$( '#csv_file' ).on( 'change', this.onFileSelect.bind( this ) );
+			$( '#preview-import-btn' ).on( 'click', this.onPreviewImport.bind( this ) );
+			$( '#start-import-btn' ).on( 'click', this.onStartImport.bind( this ) );
+			
+			// File drag and drop
+			$( '#upload-area' ).on( {
+				'dragover dragenter': function(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					$(this).addClass('dragover');
+				},
+				'dragleave dragend drop': function(e) {
+					e.preventDefault();
+					e.stopPropagation();
+					$(this).removeClass('dragover');
+				},
+				'drop': this.onFileDrop.bind(this)
+			});
 		},
 
 		loadInitialData() {
@@ -364,6 +388,293 @@
 
 		formatNumber( num ) {
 			return new Intl.NumberFormat().format( num );
+		},
+		
+		// Tab Management
+		onTabClick( e ) {
+			e.preventDefault();
+			const targetTab = $( e.target ).attr( 'href' ).substring( 1 );
+			this.switchTab( targetTab );
+		},
+		
+		switchTab( tabName ) {
+			// Update nav tabs
+			$( '.nav-tab' ).removeClass( 'nav-tab-active' );
+			$( '#' + tabName + '-tab' ).addClass( 'nav-tab-active' );
+			
+			// Update tab content
+			$( '.tab-content' ).hide().removeClass( 'active' );
+			$( '#' + tabName + '-content' ).show().addClass( 'active' );
+		},
+		
+		// Import Functions
+		onFileSelect( e ) {
+			const file = e.target.files[0];
+			if ( file ) {
+				this.handleFileSelection( file );
+			}
+		},
+		
+		onFileDrop( e ) {
+			const files = e.originalEvent.dataTransfer.files;
+			if ( files.length > 0 ) {
+				const file = files[0];
+				if ( file.type === 'text/csv' || file.name.endsWith('.csv') ) {
+					$( '#csv_file' )[0].files = files;
+					this.handleFileSelection( file );
+				} else {
+					this.showImportError( 'Please select a CSV file.' );
+				}
+			}
+		},
+		
+		handleFileSelection( file ) {
+			$( '#upload-area .upload-instructions p' ).first().html(
+				'<strong>Selected: ' + file.name + '</strong> (' + this.formatFileSize( file.size ) + ')'
+			);
+			$( '#preview-import-btn' ).prop( 'disabled', false );
+		},
+		
+		onPreviewImport( e ) {
+			e.preventDefault();
+			
+			// Validate file is selected
+			const csvFile = $( '#csv_file' )[0].files[0];
+			if ( ! csvFile ) {
+				this.showImportError( 'Please select a CSV file first.' );
+				return;
+			}
+			
+			const formData = new FormData( $( '#wp-data-bridge-import-form' )[0] );
+			formData.append( 'action', 'wp_data_bridge_import_preview' );
+			
+			// Get the import nonce from the form
+			const importNonce = $( '#wp_data_bridge_import_nonce' ).val();
+			if ( ! importNonce ) {
+				this.showImportError( 'Security nonce missing. Please refresh the page.' );
+				return;
+			}
+			formData.append( 'nonce', importNonce );
+			
+			// Debug: Log FormData contents
+			console.log('FormData contents:', {
+				hasFile: formData.has('csv_file'),
+				hasNonce: formData.has('nonce'),
+				hasAction: formData.has('action'),
+				fileName: csvFile.name,
+				fileSize: csvFile.size
+			});
+			
+			$( '#import-spinner' ).addClass( 'is-active' );
+			$( '#preview-import-btn' ).prop( 'disabled', true );
+			
+			$.ajax( {
+				url: wpDataBridge.ajaxUrl,
+				type: 'POST',
+				data: formData,
+				processData: false,
+				contentType: false,
+				success: ( response ) => {
+					if ( response.success ) {
+						this.showImportPreview( response.data );
+						$( '#start-import-btn' ).prop( 'disabled', false );
+					} else {
+						this.showImportError( response.data || 'Preview failed' );
+					}
+				},
+				error: ( xhr, status, error ) => {
+					console.error('Preview AJAX Error:', {
+						status: xhr.status,
+						statusText: xhr.statusText,
+						responseText: xhr.responseText,
+						error: error
+					});
+					let errorMessage = 'Network error during preview';
+					if ( xhr.responseText ) {
+						try {
+							const response = JSON.parse( xhr.responseText );
+							if ( response.data ) {
+								errorMessage += ': ' + response.data;
+							}
+						} catch ( e ) {
+							errorMessage += ' (Status: ' + xhr.status + ')';
+						}
+					}
+					this.showImportError( errorMessage );
+				},
+				complete: () => {
+					$( '#import-spinner' ).removeClass( 'is-active' );
+					$( '#preview-import-btn' ).prop( 'disabled', false );
+				}
+			} );
+		},
+		
+		onStartImport( e ) {
+			e.preventDefault();
+			
+			if ( ! this.validateImportForm() ) {
+				return;
+			}
+			
+			const formData = new FormData( $( '#wp-data-bridge-import-form' )[0] );
+			formData.append( 'action', 'wp_data_bridge_import' );
+			// Get the import nonce from the form  
+			const importNonce = $( '#wp_data_bridge_import_nonce' ).val();
+			formData.append( 'nonce', importNonce );
+			
+			this.showImportProgress();
+			this.setImportProgress( 0, 'Preparing import...' );
+			$( '#start-import-btn' ).prop( 'disabled', true );
+			$( '#import-spinner' ).addClass( 'is-active' );
+			
+			$.ajax( {
+				url: wpDataBridge.ajaxUrl,
+				type: 'POST',
+				data: formData,
+				processData: false,
+				contentType: false,
+				success: ( response ) => {
+					if ( response.success ) {
+						this.handleImportSuccess( response.data );
+					} else {
+						this.handleImportError( response.data || 'Import failed' );
+					}
+				},
+				error: ( xhr ) => {
+					const message = xhr.responseJSON && xhr.responseJSON.data
+						? xhr.responseJSON.data
+						: 'Network error during import';
+					this.handleImportError( message );
+				},
+				complete: () => {
+					$( '#start-import-btn' ).prop( 'disabled', false );
+					$( '#import-spinner' ).removeClass( 'is-active' );
+				}
+			} );
+		},
+		
+		validateImportForm() {
+			const targetSiteId = $( '#import_target_site_id' ).val();
+			if ( ! targetSiteId ) {
+				this.showImportError( 'Please select a target site.' );
+				return false;
+			}
+			
+			const csvFile = $( '#csv_file' )[0].files[0];
+			if ( ! csvFile ) {
+				this.showImportError( 'Please select a CSV file to import.' );
+				return false;
+			}
+			
+			return true;
+		},
+		
+		showImportPreview( data ) {
+			const container = $( '#preview-content' );
+			let html = `
+				<div class="import-preview-summary">
+					<p><strong>Headers:</strong> ${ data.headers.join( ', ' ) }</p>
+					<p><strong>Total Rows:</strong> ${ this.formatNumber( data.total_rows ) }</p>
+				</div>
+			`;
+			
+			if ( data.preview_rows && data.preview_rows.length > 0 ) {
+				html += '<div class="import-preview-table">';
+				html += '<table class="widefat striped">';
+				html += '<thead><tr>';
+				data.headers.forEach( header => {
+					html += '<th>' + header + '</th>';
+				});
+				html += '</tr></thead><tbody>';
+				
+				data.preview_rows.forEach( row => {
+					html += '<tr>';
+					row.forEach( cell => {
+						const cellContent = cell ? String(cell).substring(0, 50) + (cell.length > 50 ? '...' : '') : '';
+						html += '<td>' + cellContent + '</td>';
+					});
+					html += '</tr>';
+				});
+				
+				html += '</tbody></table></div>';
+			}
+			
+			container.html( html );
+			$( '#import-preview' ).show();
+		},
+		
+		showImportProgress() {
+			$( '#import-progress' ).show().addClass( 'fadeIn' );
+		},
+		
+		setImportProgress( percentage, text ) {
+			$( '#import-progress-fill' ).css( 'width', percentage + '%' );
+			$( '#import-progress-text' ).text( text );
+		},
+		
+		handleImportSuccess( data ) {
+			this.setImportProgress( 100, 'Import complete!' );
+			
+			setTimeout( () => {
+				$( '#import-progress' ).hide();
+				this.showImportResults( data.results );
+				this.showNotice( data.message, 'success' );
+			}, 1000 );
+		},
+		
+		handleImportError( message ) {
+			$( '#import-progress' ).hide();
+			this.showImportError( message );
+		},
+		
+		showImportResults( results ) {
+			const container = $( '#import-summary' );
+			const html = `
+				<div class="import-results-summary">
+					<div class="import-stat success">
+						<span class="stat-number">${ this.formatNumber( results.success ) }</span>
+						<span class="stat-label">Successful</span>
+					</div>
+					<div class="import-stat skipped">
+						<span class="stat-number">${ this.formatNumber( results.skipped ) }</span>
+						<span class="stat-label">Skipped</span>
+					</div>
+					<div class="import-stat error">
+						<span class="stat-number">${ this.formatNumber( results.errors ) }</span>
+						<span class="stat-label">Errors</span>
+					</div>
+				</div>
+				${ results.messages && results.messages.length > 0 ? 
+					'<div class="import-messages"><h4>Messages:</h4><ul>' + 
+					results.messages.map( msg => '<li>' + msg + '</li>' ).join('') + 
+					'</ul></div>' : '' 
+				}
+				${ results.error_details && results.error_details.length > 0 ? 
+					'<div class="import-errors"><h4>Errors:</h4><ul>' + 
+					results.error_details.map( error => '<li>' + error + '</li>' ).join('') + 
+					'</ul></div>' : '' 
+				}
+			`;
+			
+			container.html( html );
+			$( '#import-results' ).show().addClass( 'fadeIn' );
+		},
+		
+		showImportError( message ) {
+			$( '#import-error-message' ).text( message );
+			$( '#import-error' ).show();
+			
+			setTimeout( () => {
+				$( '#import-error' ).fadeOut();
+			}, 8000 );
+		},
+		
+		formatFileSize( bytes ) {
+			if ( bytes === 0 ) return '0 Bytes';
+			const k = 1024;
+			const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+			const i = Math.floor( Math.log( bytes ) / Math.log( k ) );
+			return parseFloat( ( bytes / Math.pow( k, i ) ).toFixed( 2 ) ) + ' ' + sizes[i];
 		},
 	};
 

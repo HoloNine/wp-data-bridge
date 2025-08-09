@@ -12,12 +12,23 @@ $is_multisite = is_multisite();
     
     <div class="wp-data-bridge-header">
         <p class="description">
-            <?php esc_html_e('Export posts, pages, custom post types, users, and featured images from your WordPress site to CSV format.', 'wp-data-bridge'); ?>
+            <?php esc_html_e('Export and import posts, pages, custom post types, users, and featured images to/from CSV format.', 'wp-data-bridge'); ?>
         </p>
     </div>
 
+    <nav class="nav-tab-wrapper wp-clearfix">
+        <a href="#export" class="nav-tab nav-tab-active" id="export-tab">
+            <?php esc_html_e('Export Data', 'wp-data-bridge'); ?>
+        </a>
+        <a href="#import" class="nav-tab" id="import-tab">
+            <?php esc_html_e('Import Data', 'wp-data-bridge'); ?>
+        </a>
+    </nav>
+
     <div class="wp-data-bridge-content">
-        <form id="wp-data-bridge-form" method="post">
+        <!-- Export Tab Content -->
+        <div id="export-content" class="tab-content active">
+            <form id="wp-data-bridge-form" method="post">
             <?php wp_nonce_field('wp_data_bridge_nonce', 'wp_data_bridge_nonce'); ?>
             
             <table class="form-table" role="presentation">
@@ -167,6 +178,141 @@ $is_multisite = is_multisite();
         <div id="export-error" class="notice notice-error" style="display: none;">
             <p id="error-message"></p>
         </div>
+        </div>
+        <!-- End Export Tab Content -->
+
+        <!-- Import Tab Content -->
+        <div id="import-content" class="tab-content" style="display: none;">
+            <form id="wp-data-bridge-import-form" method="post" enctype="multipart/form-data">
+                <?php wp_nonce_field('wp_data_bridge_import', 'wp_data_bridge_import_nonce'); ?>
+                
+                <table class="form-table" role="presentation">
+                    
+                    <?php if ($is_multisite && count($available_sites) > 1): ?>
+                    <tr>
+                        <th scope="row">
+                            <label for="import_target_site_id"><?php esc_html_e('Target Site', 'wp-data-bridge'); ?></label>
+                        </th>
+                        <td>
+                            <select name="target_site_id" id="import_target_site_id" class="regular-text" required>
+                                <option value=""><?php esc_html_e('-- Select Target Site --', 'wp-data-bridge'); ?></option>
+                                <?php foreach ($available_sites as $site): ?>
+                                    <option value="<?php echo esc_attr($site['blog_id']); ?>">
+                                        <?php echo esc_html($site['blogname']); ?> 
+                                        (<?php echo esc_html($site['domain'] . $site['path']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">
+                                <?php esc_html_e('Choose which site to import data into.', 'wp-data-bridge'); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <input type="hidden" name="target_site_id" id="import_target_site_id" value="<?php echo esc_attr($available_sites[0]['blog_id']); ?>" />
+                    <?php endif; ?>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="csv_file"><?php esc_html_e('CSV File', 'wp-data-bridge'); ?></label>
+                        </th>
+                        <td>
+                            <div class="wp-data-bridge-upload-area" id="upload-area">
+                                <input type="file" name="csv_file" id="csv_file" accept=".csv" required />
+                                <div class="upload-instructions">
+                                    <p><strong><?php esc_html_e('Drop your CSV file here or click to browse', 'wp-data-bridge'); ?></strong></p>
+                                    <p class="description">
+                                        <?php esc_html_e('Upload a CSV file exported by WP Data Bridge or compatible format.', 'wp-data-bridge'); ?>
+                                    </p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <?php esc_html_e('Import Options', 'wp-data-bridge'); ?>
+                        </th>
+                        <td>
+                            <fieldset>
+                                <legend class="screen-reader-text">
+                                    <span><?php esc_html_e('Import Options', 'wp-data-bridge'); ?></span>
+                                </legend>
+                                
+                                <label for="duplicate_handling">
+                                    <?php esc_html_e('Duplicate Handling:', 'wp-data-bridge'); ?>
+                                    <select name="duplicate_handling" id="duplicate_handling">
+                                        <option value="skip"><?php esc_html_e('Skip duplicates', 'wp-data-bridge'); ?></option>
+                                        <option value="update"><?php esc_html_e('Update existing', 'wp-data-bridge'); ?></option>
+                                        <option value="create_new"><?php esc_html_e('Create new', 'wp-data-bridge'); ?></option>
+                                    </select>
+                                </label>
+                                <br /><br />
+                                
+                                <label for="missing_post_type_action">
+                                    <?php esc_html_e('Missing Post Type Action:', 'wp-data-bridge'); ?>
+                                    <select name="missing_post_type_action" id="missing_post_type_action">
+                                        <option value="skip"><?php esc_html_e('Skip posts', 'wp-data-bridge'); ?></option>
+                                        <option value="convert_to_post"><?php esc_html_e('Convert to post', 'wp-data-bridge'); ?></option>
+                                        <option value="notify"><?php esc_html_e('Stop and notify', 'wp-data-bridge'); ?></option>
+                                    </select>
+                                </label>
+                                <br /><br />
+                                
+                                <label for="import_images">
+                                    <input name="import_images" type="checkbox" id="import_images" value="1" checked />
+                                    <?php esc_html_e('Import featured images', 'wp-data-bridge'); ?>
+                                </label>
+                                <br />
+                                
+                                <label for="create_missing_users">
+                                    <input name="create_missing_users" type="checkbox" id="create_missing_users" value="1" />
+                                    <?php esc_html_e('Create missing users', 'wp-data-bridge'); ?>
+                                </label>
+                                <br />
+                                
+                                <label for="update_existing_users">
+                                    <input name="update_existing_users" type="checkbox" id="update_existing_users" value="1" />
+                                    <?php esc_html_e('Update existing users', 'wp-data-bridge'); ?>
+                                </label>
+                                
+                            </fieldset>
+                        </td>
+                    </tr>
+                </table>
+
+                <div class="wp-data-bridge-actions">
+                    <?php submit_button(__('Preview Import', 'wp-data-bridge'), 'secondary', 'preview_import', false, ['id' => 'preview-import-btn']); ?>
+                    <?php submit_button(__('Start Import', 'wp-data-bridge'), 'primary', 'start_import', false, ['id' => 'start-import-btn', 'disabled' => 'disabled']); ?>
+                    <span class="spinner" id="import-spinner"></span>
+                </div>
+            </form>
+
+            <div id="import-preview" class="wp-data-bridge-preview" style="display: none;">
+                <h3><?php esc_html_e('Import Preview', 'wp-data-bridge'); ?></h3>
+                <div id="preview-content"></div>
+            </div>
+
+            <div id="import-progress" class="wp-data-bridge-progress" style="display: none;">
+                <h3><?php esc_html_e('Import Progress', 'wp-data-bridge'); ?></h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="import-progress-fill"></div>
+                </div>
+                <p class="progress-text" id="import-progress-text">
+                    <?php esc_html_e('Preparing import...', 'wp-data-bridge'); ?>
+                </p>
+            </div>
+
+            <div id="import-results" class="wp-data-bridge-results" style="display: none;">
+                <h3><?php esc_html_e('Import Complete!', 'wp-data-bridge'); ?></h3>
+                <div id="import-summary"></div>
+            </div>
+
+            <div id="import-error" class="notice notice-error" style="display: none;">
+                <p id="import-error-message"></p>
+            </div>
+        </div>
+        <!-- End Import Tab Content -->
     </div>
 
     <div class="wp-data-bridge-help">
