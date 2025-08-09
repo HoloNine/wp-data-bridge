@@ -1,6 +1,6 @@
 /* global wpDataBridge, jQuery */
-( function ( $ ) {
-	'use strict';
+(function ($) {
+	"use strict";
 
 	const WPDataBridge = {
 		init() {
@@ -9,159 +9,168 @@
 		},
 
 		bindEvents() {
-			$( '#site_id' ).on( 'change', this.onSiteChange.bind( this ) );
-			$( '#wp-data-bridge-form' ).on(
-				'submit',
-				this.onFormSubmit.bind( this )
+			// Tab switching
+			$(".nav-tab").on("click", this.onTabClick.bind(this));
+
+			// Export events
+			$("#site_id").on("change", this.onSiteChange.bind(this));
+			$("#wp-data-bridge-form").on("submit", this.onFormSubmit.bind(this));
+			$("#export_posts").on("change", this.togglePostTypesRow.bind(this));
+			$("#date_start, #date_end").on(
+				"change",
+				this.validateDateRange.bind(this),
 			);
-			$( '#export_posts' ).on(
-				'change',
-				this.togglePostTypesRow.bind( this )
-			);
-			$( '#date_start, #date_end' ).on(
-				'change',
-				this.validateDateRange.bind( this )
-			);
+
+			// Import events
+			$("#csv_file").on("change", this.onFileSelect.bind(this));
+			$("#check-file-btn").on("click", this.onCheckFile.bind(this));
+			$("#start-import-btn").on("click", this.onStartImport.bind(this));
+
+			// File drag and drop
+			$("#upload-area").on({
+				"dragover dragenter": function (e) {
+					e.preventDefault();
+					e.stopPropagation();
+					$(this).addClass("dragover");
+				},
+				"dragleave dragend drop": function (e) {
+					e.preventDefault();
+					e.stopPropagation();
+					$(this).removeClass("dragover");
+				},
+				drop: this.onFileDrop.bind(this),
+			});
 		},
 
 		loadInitialData() {
-			const siteId = $( '#site_id' ).val();
-			if ( siteId ) {
-				this.loadSiteData( siteId );
+			const siteId = $("#site_id").val();
+			if (siteId) {
+				this.loadSiteData(siteId);
 			} else {
-				this.loadSiteData( 1 );
+				this.loadSiteData(1);
 			}
 		},
 
-		onSiteChange( e ) {
-			const siteId = $( e.target ).val();
-			if ( siteId ) {
-				this.loadSiteData( siteId );
+		onSiteChange(e) {
+			const siteId = $(e.target).val();
+			if (siteId) {
+				this.loadSiteData(siteId);
 			}
 		},
 
-		loadSiteData( siteId ) {
-			this.showLoading( '#site-statistics' );
-			this.showLoading( '#post-types-container' );
+		loadSiteData(siteId) {
+			this.showLoading("#site-statistics");
+			this.showLoading("#post-types-container");
 
-			$.ajax( {
+			$.ajax({
 				url: wpDataBridge.ajaxUrl,
-				type: 'POST',
+				type: "POST",
 				data: {
-					action: 'wp_data_bridge_get_site_stats',
+					action: "wp_data_bridge_get_site_stats",
 					site_id: siteId,
 					nonce: wpDataBridge.nonce,
 				},
-				success: ( response ) => {
-					if ( response.success ) {
-						this.updateSiteStatistics( response.data.stats );
-						this.updatePostTypes( response.data.post_types );
-						$( '#site-statistics' ).fadeIn();
+				success: (response) => {
+					if (response.success) {
+						this.updateSiteStatistics(response.data.stats);
+						this.updatePostTypes(response.data.post_types);
+						$("#site-statistics").fadeIn();
 					} else {
-						this.showError(
-							response.data || 'Failed to load site data'
-						);
+						this.showError(response.data || "Failed to load site data");
 					}
 				},
 				error: () => {
-					this.showError( 'Network error while loading site data' );
+					this.showError("Network error while loading site data");
 				},
 				complete: () => {
-					this.hideLoading( '#site-statistics' );
-					this.hideLoading( '#post-types-container' );
+					this.hideLoading("#site-statistics");
+					this.hideLoading("#post-types-container");
 				},
-			} );
+			});
 		},
 
-		updateSiteStatistics( stats ) {
-			$( '#posts-count' ).text( this.formatNumber( stats.posts ) );
-			$( '#pages-count' ).text( this.formatNumber( stats.pages ) );
-			$( '#users-count' ).text( this.formatNumber( stats.users ) );
-			$( '#attachments-count' ).text(
-				this.formatNumber( stats.attachments )
-			);
+		updateSiteStatistics(stats) {
+			$("#posts-count").text(this.formatNumber(stats.posts));
+			$("#pages-count").text(this.formatNumber(stats.pages));
+			$("#users-count").text(this.formatNumber(stats.users));
+			$("#attachments-count").text(this.formatNumber(stats.attachments));
 		},
 
-		updatePostTypes( postTypes ) {
-			const container = $( '#post-types-container' );
+		updatePostTypes(postTypes) {
+			const container = $("#post-types-container");
 			const html = postTypes
 				.map(
-					( postType ) => `
+					(postType) => `
                 <div class="post-type-item">
                     <label class="post-type-label">
                         <input type="checkbox" name="post_types[]" value="${
-							postType.name
-						}" 
+													postType.name
+												}"
                                ${
-									this.isDefaultPostType( postType.name )
-										? 'checked'
-										: ''
-								}>
-                        ${ postType.label }
-                        <span class="post-type-count">${ this.formatNumber(
-							postType.count
-						) }</span>
+																	this.isDefaultPostType(postType.name)
+																		? "checked"
+																		: ""
+																}>
+                        ${postType.label}
+                        <span class="post-type-count">${this.formatNumber(
+													postType.count,
+												)}</span>
                     </label>
                 </div>
-            `
+            `,
 				)
-				.join( '' );
+				.join("");
 
-			container.html( html );
+			container.html(html);
 		},
 
-		isDefaultPostType( name ) {
-			return [ 'post', 'page' ].includes( name );
+		isDefaultPostType(name) {
+			return ["post", "page"].includes(name);
 		},
 
 		togglePostTypesRow() {
-			const isChecked = $( '#export_posts' ).is( ':checked' );
-			$( '#post-types-row' ).toggle( isChecked );
+			const isChecked = $("#export_posts").is(":checked");
+			$("#post-types-row").toggle(isChecked);
 		},
 
 		validateDateRange() {
-			const startDate = $( '#date_start' ).val();
-			const endDate = $( '#date_end' ).val();
-			const siteId = $( '#site_id' ).val();
+			const startDate = $("#date_start").val();
+			const endDate = $("#date_end").val();
+			const siteId = $("#site_id").val();
 
-			if ( startDate && endDate && siteId ) {
-				const selectedPostTypes = $(
-					'input[name="post_types[]"]:checked'
-				)
-					.map( function () {
+			if (startDate && endDate && siteId) {
+				const selectedPostTypes = $('input[name="post_types[]"]:checked')
+					.map(function () {
 						return this.value;
-					} )
+					})
 					.get();
 
-				if ( selectedPostTypes.length > 0 ) {
-					$.ajax( {
+				if (selectedPostTypes.length > 0) {
+					$.ajax({
 						url: wpDataBridge.ajaxUrl,
-						type: 'POST',
+						type: "POST",
 						data: {
-							action: 'wp_data_bridge_validate_date_range',
+							action: "wp_data_bridge_validate_date_range",
 							site_id: siteId,
 							post_types: selectedPostTypes,
 							date_start: startDate,
 							date_end: endDate,
 							nonce: wpDataBridge.nonce,
 						},
-						success: ( response ) => {
-							if ( response.success && ! response.data.valid ) {
-								this.showNotice(
-									response.data.message,
-									'warning'
-								);
+						success: (response) => {
+							if (response.success && !response.data.valid) {
+								this.showNotice(response.data.message, "warning");
 							}
 						},
-					} );
+					});
 				}
 			}
 		},
 
-		onFormSubmit( e ) {
+		onFormSubmit(e) {
 			e.preventDefault();
 
-			if ( ! this.validateForm() ) {
+			if (!this.validateForm()) {
 				return;
 			}
 
@@ -169,23 +178,23 @@
 		},
 
 		validateForm() {
-			const siteId = $( '#site_id' ).val();
+			const siteId = $("#site_id").val();
 
-			if ( ! siteId ) {
-				this.showError( 'Please select a site.' );
+			if (!siteId) {
+				this.showError("Please select a site.");
 				return false;
 			}
 
-			const exportTypes = $( 'input[name="export_types[]"]:checked' );
-			if ( exportTypes.length === 0 ) {
-				this.showError( 'Please select at least one export type.' );
+			const exportTypes = $('input[name="export_types[]"]:checked');
+			if (exportTypes.length === 0) {
+				this.showError("Please select at least one export type.");
 				return false;
 			}
 
-			if ( $( '#export_posts' ).is( ':checked' ) ) {
-				const postTypes = $( 'input[name="post_types[]"]:checked' );
-				if ( postTypes.length === 0 ) {
-					this.showError( 'Please select at least one post type.' );
+			if ($("#export_posts").is(":checked")) {
+				const postTypes = $('input[name="post_types[]"]:checked');
+				if (postTypes.length === 0) {
+					this.showError("Please select at least one post type.");
 					return false;
 				}
 			}
@@ -197,177 +206,575 @@
 			const formData = this.getFormData();
 
 			this.showProgress();
-			this.setProgress( 0, wpDataBridge.strings.exporting );
-			$( '#start-export-btn' ).prop( 'disabled', true );
-			$( '#export-spinner' ).addClass( 'is-active' );
+			this.setProgress(0, wpDataBridge.strings.exporting);
+			$("#start-export-btn").prop("disabled", true);
+			$("#export-spinner").addClass("is-active");
 
-			$.ajax( {
+			$.ajax({
 				url: wpDataBridge.ajaxUrl,
-				type: 'POST',
+				type: "POST",
 				data: {
-					action: 'wp_data_bridge_export',
+					action: "wp_data_bridge_export",
 					...formData,
 					nonce: wpDataBridge.nonce,
 				},
-				success: ( response ) => {
-					if ( response.success ) {
-						this.handleExportSuccess( response.data );
+				success: (response) => {
+					if (response.success) {
+						this.handleExportSuccess(response.data);
 					} else {
-						this.handleExportError(
-							response.data || 'Export failed'
-						);
+						this.handleExportError(response.data || "Export failed");
 					}
 				},
-				error: ( xhr ) => {
+				error: (xhr) => {
 					const message =
 						xhr.responseJSON && xhr.responseJSON.data
 							? xhr.responseJSON.data
-							: 'Network error during export';
-					this.handleExportError( message );
+							: "Network error during export";
+					this.handleExportError(message);
 				},
 				complete: () => {
-					$( '#start-export-btn' ).prop( 'disabled', false );
-					$( '#export-spinner' ).removeClass( 'is-active' );
+					$("#start-export-btn").prop("disabled", false);
+					$("#export-spinner").removeClass("is-active");
 				},
-			} );
+			});
 		},
 
 		getFormData() {
 			const data = {};
 
-			data.site_id = $( '#site_id' ).val();
-			data.export_types = $( 'input[name="export_types[]"]:checked' )
-				.map( function () {
+			data.site_id = $("#site_id").val();
+			data.export_types = $('input[name="export_types[]"]:checked')
+				.map(function () {
 					return this.value;
-				} )
+				})
 				.get();
-			data.post_types = $( 'input[name="post_types[]"]:checked' )
-				.map( function () {
+			data.post_types = $('input[name="post_types[]"]:checked')
+				.map(function () {
 					return this.value;
-				} )
+				})
 				.get();
-			data.date_start = $( '#date_start' ).val();
-			data.date_end = $( '#date_end' ).val();
+			data.date_start = $("#date_start").val();
+			data.date_end = $("#date_end").val();
 
 			return data;
 		},
 
-		handleExportSuccess( data ) {
-			this.setProgress( 100, wpDataBridge.strings.complete );
+		handleExportSuccess(data) {
+			this.setProgress(100, wpDataBridge.strings.complete);
 
-			setTimeout( () => {
+			setTimeout(() => {
 				this.hideProgress();
-				this.showResults( data.files );
-				this.showNotice( data.message, 'success' );
-			}, 1000 );
+				this.showResults(data.files);
+				this.showNotice(data.message, "success");
+			}, 1000);
 		},
 
-		handleExportError( message ) {
+		handleExportError(message) {
 			this.hideProgress();
-			this.showError( message );
+			this.showError(message);
 		},
 
 		showProgress() {
-			$( '#export-progress' ).show().addClass( 'fadeIn' );
+			$("#export-progress").show().addClass("fadeIn");
 		},
 
 		hideProgress() {
-			$( '#export-progress' ).hide().removeClass( 'fadeIn' );
+			$("#export-progress").hide().removeClass("fadeIn");
 		},
 
-		setProgress( percentage, text ) {
-			$( '#progress-fill' ).css( 'width', percentage + '%' );
-			$( '#progress-text' ).text( text );
+		setProgress(percentage, text) {
+			$("#progress-fill").css("width", percentage + "%");
+			$("#progress-text").text(text);
 		},
 
-		showResults( files ) {
-			const container = $( '#download-links' );
+		showResults(files) {
+			const container = $("#download-links");
 			const html = files
 				.map(
-					( file ) => `
+					(file) => `
                 <div class="download-item">
                     <div class="download-info">
-                        <div class="download-title">${ this.getFileTypeLabel(
-							file.type
-						) } Export</div>
+                        <div class="download-title">${this.getFileTypeLabel(
+													file.type,
+												)} Export</div>
                         <div class="download-meta">
-                            ${ this.formatNumber( file.records ) } records • ${
-								file.size
-							}
+                            ${this.formatNumber(file.records)} records • ${
+															file.size
+														}
                         </div>
                     </div>
                     <div class="download-actions">
-                        <a href="${
-							file.url
-						}" class="download-btn" download="${ file.filename }">
+                        <a href="${file.url}" class="download-btn" download="${
+													file.filename
+												}">
                             Download CSV
                         </a>
                     </div>
                 </div>
-            `
+            `,
 				)
-				.join( '' );
+				.join("");
 
-			container.html( html );
-			$( '#export-results' ).show().addClass( 'fadeIn' );
+			container.html(html);
+			$("#export-results").show().addClass("fadeIn");
 		},
 
-		getFileTypeLabel( type ) {
+		getFileTypeLabel(type) {
 			const labels = {
-				posts: 'Posts & Pages',
-				users: 'Users',
-				images: 'Featured Images',
+				posts: "Posts & Pages",
+				users: "Users",
 			};
-			return labels[ type ] || type;
+			return labels[type] || type;
 		},
 
-		showError( message ) {
-			$( '#error-message' ).text( message );
-			$( '#export-error' ).show();
+		showError(message) {
+			$("#error-message").text(message);
+			$("#export-error").show();
 
-			setTimeout( () => {
-				$( '#export-error' ).fadeOut();
-			}, 8000 );
+			setTimeout(() => {
+				$("#export-error").fadeOut();
+			}, 8000);
 		},
 
-		showNotice( message, type = 'info' ) {
-			let noticeClass = 'notice-info';
-			if ( type === 'success' ) {
-				noticeClass = 'notice-success';
-			} else if ( type === 'warning' ) {
-				noticeClass = 'notice-warning';
+		showNotice(message, type = "info") {
+			let noticeClass = "notice-info";
+			if (type === "success") {
+				noticeClass = "notice-success";
+			} else if (type === "warning") {
+				noticeClass = "notice-warning";
 			}
 
-			const notice = $( `
-                <div class="notice ${ noticeClass } wp-data-bridge-notice is-dismissible">
-                    <p>${ message }</p>
+			const notice = $(`
+                <div class="notice ${noticeClass} wp-data-bridge-notice is-dismissible">
+                    <p>${message}</p>
                     <button type="button" class="notice-dismiss">
                         <span class="screen-reader-text">Dismiss this notice.</span>
                     </button>
                 </div>
-            ` );
+            `);
 
-			$( '.wrap h1' ).after( notice );
+			$(".wrap h1").after(notice);
 
-			notice.on( 'click', '.notice-dismiss', function () {
+			notice.on("click", ".notice-dismiss", function () {
 				notice.fadeOut();
-			} );
+			});
 		},
 
-		showLoading( selector ) {
-			$( selector ).addClass( 'loading' );
+		showLoading(selector) {
+			$(selector).addClass("loading");
 		},
 
-		hideLoading( selector ) {
-			$( selector ).removeClass( 'loading' );
+		hideLoading(selector) {
+			$(selector).removeClass("loading");
 		},
 
-		formatNumber( num ) {
-			return new Intl.NumberFormat().format( num );
+		formatNumber(num) {
+			return new Intl.NumberFormat().format(num);
+		},
+
+		// Tab Management
+		onTabClick(e) {
+			e.preventDefault();
+			const targetTab = $(e.target).attr("href").substring(1);
+			this.switchTab(targetTab);
+		},
+
+		switchTab(tabName) {
+			// Update nav tabs
+			$(".nav-tab").removeClass("nav-tab-active");
+			$("#" + tabName + "-tab").addClass("nav-tab-active");
+
+			// Update tab content
+			$(".tab-content").hide().removeClass("active");
+			$("#" + tabName + "-content")
+				.show()
+				.addClass("active");
+		},
+
+		// Import Functions
+		onFileSelect(e) {
+			const file = e.target.files[0];
+			if (file) {
+				this.handleFileSelection(file);
+			}
+		},
+
+		onFileDrop(e) {
+			const files = e.originalEvent.dataTransfer.files;
+			if (files.length > 0) {
+				const file = files[0];
+				if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+					$("#csv_file")[0].files = files;
+					this.handleFileSelection(file);
+				} else {
+					this.showImportError("Please select a CSV file.");
+				}
+			}
+		},
+
+		handleFileSelection(file) {
+			$("#upload-area .upload-instructions p")
+				.first()
+				.html(
+					"<strong>Selected: " +
+						file.name +
+						"</strong> (" +
+						this.formatFileSize(file.size) +
+						")",
+				);
+			$("#check-file-btn").prop("disabled", false);
+		},
+
+		onCheckFile(e) {
+			e.preventDefault();
+
+			// Validate file is selected
+			const csvFile = $("#csv_file")[0].files[0];
+			if (!csvFile) {
+				this.showImportError("Please select a CSV file first.");
+				return;
+			}
+
+			const formData = new FormData($("#wp-data-bridge-import-form")[0]);
+			formData.append("action", "wp_data_bridge_check_file");
+
+			// Get the import nonce from the form
+			const importNonce = $("#wp_data_bridge_import_nonce").val();
+			if (!importNonce) {
+				this.showImportError(
+					"Security nonce missing. Please refresh the page.",
+				);
+				return;
+			}
+			formData.append("nonce", importNonce);
+
+			$("#import-spinner").addClass("is-active");
+			$("#check-file-btn").prop("disabled", true);
+
+			$.ajax({
+				url: wpDataBridge.ajaxUrl,
+				type: "POST",
+				data: formData,
+				processData: false,
+				contentType: false,
+				success: (response) => {
+					if (response.success) {
+						this.showFileCheckResults(response.data);
+					} else {
+						this.showImportError(response.data || "File check failed");
+					}
+				},
+				error: (xhr, status, error) => {
+					console.error("File Check AJAX Error:", {
+						status: xhr.status,
+						statusText: xhr.statusText,
+						responseText: xhr.responseText,
+						error: error,
+					});
+					let errorMessage = "Network error during file check";
+					if (xhr.responseText) {
+						try {
+							const response = JSON.parse(xhr.responseText);
+							if (response.data) {
+								errorMessage += ": " + response.data;
+							}
+						} catch (e) {
+							errorMessage += " (Status: " + xhr.status + ")";
+						}
+					}
+					this.showImportError(errorMessage);
+				},
+				complete: () => {
+					$("#import-spinner").removeClass("is-active");
+					$("#check-file-btn").prop("disabled", false);
+				},
+			});
+		},
+
+		onStartImport(e) {
+			e.preventDefault();
+
+			if (!this.validateImportForm()) {
+				return;
+			}
+
+			const formData = new FormData($("#wp-data-bridge-import-form")[0]);
+			formData.append("action", "wp_data_bridge_import");
+			// Get the import nonce from the form
+			const importNonce = $("#wp_data_bridge_import_nonce").val();
+			formData.append("nonce", importNonce);
+
+			this.showImportProgress();
+			this.setImportProgress(0, "Preparing import...");
+			$("#start-import-btn").prop("disabled", true);
+			$("#import-spinner").addClass("is-active");
+
+			$.ajax({
+				url: wpDataBridge.ajaxUrl,
+				type: "POST",
+				data: formData,
+				processData: false,
+				contentType: false,
+				success: (response) => {
+					if (response.success) {
+						this.handleImportSuccess(response.data);
+					} else {
+						this.handleImportError(response.data || "Import failed");
+					}
+				},
+				error: (xhr) => {
+					const message =
+						xhr.responseJSON && xhr.responseJSON.data
+							? xhr.responseJSON.data
+							: "Network error during import";
+					this.handleImportError(message);
+				},
+				complete: () => {
+					$("#start-import-btn").prop("disabled", false);
+					$("#import-spinner").removeClass("is-active");
+				},
+			});
+		},
+
+		validateImportForm() {
+			const targetSiteId = $("#import_target_site_id").val();
+			if (!targetSiteId) {
+				this.showImportError("Please select a target site.");
+				return false;
+			}
+
+			const csvFile = $("#csv_file")[0].files[0];
+			if (!csvFile) {
+				this.showImportError("Please select a CSV file to import.");
+				return false;
+			}
+
+			return true;
+		},
+
+		showFileCheckResults(data) {
+			const container = $("#check-content");
+			let html = `
+				<div class="file-check-summary">
+					<div class="check-result ${data.valid ? "success" : "error"}">
+						<span class="dashicons ${
+							data.valid ? "dashicons-yes-alt" : "dashicons-dismiss"
+						}"></span>
+						${data.message}
+					</div>
+					<div class="file-info">
+						<p><strong>Import Type:</strong> ${data.import_type}</p>
+						<p><strong>Total Records:</strong> ${this.formatNumber(data.total_records)}</p>
+						<p><strong>File Size:</strong> ${data.file_size}</p>
+						<p><strong>Headers:</strong> ${
+							data.headers && Array.isArray(data.headers)
+								? data.headers.join(", ")
+								: "None"
+						}</p>
+					</div>
+				</div>
+			`;
+
+			// Check if there are missing post types that would prevent import
+			let hasMissingPostTypes = false;
+			if (
+				data.analysis &&
+				data.analysis.summary &&
+				data.analysis.summary.post_types
+			) {
+				if (
+					data.analysis.summary.post_types.missing &&
+					Array.isArray(data.analysis.summary.post_types.missing) &&
+					data.analysis.summary.post_types.missing.length > 0
+				) {
+					hasMissingPostTypes = true;
+				}
+			}
+
+			if (data.analysis) {
+				html += '<div class="file-analysis">';
+				html += "<h4>File Analysis</h4>";
+
+				if (
+					data.analysis.has_warnings &&
+					data.analysis.warnings &&
+					Array.isArray(data.analysis.warnings) &&
+					data.analysis.warnings.length > 0
+				) {
+					html += '<div class="analysis-warnings">';
+					html +=
+						'<h5><span class="dashicons dashicons-warning"></span> Warnings</h5>';
+					html += "<ul>";
+					data.analysis.warnings.forEach((warning) => {
+						html += `<li>${warning}</li>`;
+					});
+					html += "</ul>";
+					html += "</div>";
+				}
+
+				if (data.analysis.summary) {
+					html += '<div class="analysis-summary">';
+					html += "<h5>Content Summary</h5>";
+
+					if (data.analysis.summary.post_types) {
+						html += '<div class="summary-item">';
+						html += "<strong>Post Types:</strong><br>";
+						if (
+							data.analysis.summary.post_types.existing &&
+							Array.isArray(data.analysis.summary.post_types.existing) &&
+							data.analysis.summary.post_types.existing.length > 0
+						) {
+							html +=
+								'<span class="existing-types">✓ ' +
+								data.analysis.summary.post_types.existing.join(", ") +
+								"</span><br>";
+						}
+						if (
+							data.analysis.summary.post_types.missing &&
+							Array.isArray(data.analysis.summary.post_types.missing) &&
+							data.analysis.summary.post_types.missing.length > 0
+						) {
+							html +=
+								'<span class="missing-types">✗ ' +
+								data.analysis.summary.post_types.missing.join(", ") +
+								" (missing)</span>";
+						}
+						html += "</div>";
+					}
+
+					if (
+						data.analysis.summary.post_statuses &&
+						Array.isArray(data.analysis.summary.post_statuses) &&
+						data.analysis.summary.post_statuses.length > 0
+					) {
+						html += '<div class="summary-item">';
+						html +=
+							"<strong>Post Statuses:</strong> " +
+							data.analysis.summary.post_statuses.join(", ");
+						html += "</div>";
+					}
+
+					if (
+						data.analysis.summary.user_roles &&
+						Array.isArray(data.analysis.summary.user_roles) &&
+						data.analysis.summary.user_roles.length > 0
+					) {
+						html += '<div class="summary-item">';
+						html +=
+							"<strong>User Roles:</strong> " +
+							data.analysis.summary.user_roles.join(", ");
+						html += "</div>";
+					}
+
+					html += "</div>";
+				}
+
+				html += "</div>";
+			}
+
+			// Add import blocking notice if there are missing post types
+			if (hasMissingPostTypes) {
+				html += '<div class="import-blocked-notice">';
+				html += '<div class="notice notice-error">';
+				html +=
+					"<p><strong>Import Blocked:</strong> The import cannot proceed because required post types are missing. Please install the necessary plugins or themes before importing.</p>";
+				html += "</div>";
+				html += "</div>";
+			}
+
+			container.html(html);
+			$("#file-check-results").show();
+
+			// Enable or disable the import button based on missing post types
+			if (data.valid && !hasMissingPostTypes) {
+				$("#start-import-btn").prop("disabled", false);
+			} else {
+				$("#start-import-btn").prop("disabled", true);
+			}
+		},
+
+		showImportProgress() {
+			$("#import-progress").show().addClass("fadeIn");
+		},
+
+		setImportProgress(percentage, text) {
+			$("#import-progress-fill").css("width", percentage + "%");
+			$("#import-progress-text").text(text);
+		},
+
+		handleImportSuccess(data) {
+			this.setImportProgress(100, "Import complete!");
+
+			setTimeout(() => {
+				$("#import-progress").hide();
+				this.showImportResults(data.results);
+				this.showNotice(data.message, "success");
+			}, 1000);
+		},
+
+		handleImportError(message) {
+			$("#import-progress").hide();
+			this.showImportError(message);
+		},
+
+		showImportResults(results) {
+			const container = $("#import-summary");
+			const html = `
+				<div class="import-results-summary">
+					<div class="import-stat success">
+						<span class="stat-number">${this.formatNumber(results.success)}</span>
+						<span class="stat-label">Successful</span>
+					</div>
+					<div class="import-stat skipped">
+						<span class="stat-number">${this.formatNumber(results.skipped)}</span>
+						<span class="stat-label">Skipped</span>
+					</div>
+					<div class="import-stat error">
+						<span class="stat-number">${this.formatNumber(results.errors)}</span>
+						<span class="stat-label">Errors</span>
+					</div>
+				</div>
+				${
+					results.messages && results.messages.length > 0
+						? '<div class="import-messages"><h4>Messages:</h4><ul>' +
+						  results.messages.map((msg) => "<li>" + msg + "</li>").join("") +
+						  "</ul></div>"
+						: ""
+				}
+				${
+					results.error_details && results.error_details.length > 0
+						? '<div class="import-errors"><h4>Errors:</h4><ul>' +
+						  results.error_details
+								.map((error) => "<li>" + error + "</li>")
+								.join("") +
+						  "</ul></div>"
+						: ""
+				}
+			`;
+
+			container.html(html);
+			$("#import-results").show().addClass("fadeIn");
+		},
+
+		showImportError(message) {
+			$("#import-error-message").text(message);
+			$("#import-error").show();
+
+			setTimeout(() => {
+				$("#import-error").fadeOut();
+			}, 8000);
+		},
+
+		formatFileSize(bytes) {
+			if (bytes === 0) return "0 Bytes";
+			const k = 1024;
+			const sizes = ["Bytes", "KB", "MB", "GB"];
+			const i = Math.floor(Math.log(bytes) / Math.log(k));
+			return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 		},
 	};
 
-	$( document ).ready( () => {
+	$(document).ready(() => {
 		WPDataBridge.init();
-	} );
-} )( jQuery );
+	});
+})(jQuery);

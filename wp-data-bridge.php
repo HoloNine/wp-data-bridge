@@ -45,6 +45,7 @@ class WP_Data_Bridge {
     
     private function load_dependencies() {
         require_once WP_DATA_BRIDGE_PLUGIN_DIR . 'includes/class-exporter.php';
+        require_once WP_DATA_BRIDGE_PLUGIN_DIR . 'includes/class-importer.php';
         require_once WP_DATA_BRIDGE_PLUGIN_DIR . 'includes/class-csv-generator.php';
         require_once WP_DATA_BRIDGE_PLUGIN_DIR . 'includes/class-admin.php';
         require_once WP_DATA_BRIDGE_PLUGIN_DIR . 'includes/class-file-handler.php';
