@@ -323,7 +323,7 @@ class WP_Data_Bridge_Admin
         // Import AJAX handlers
         add_action('wp_ajax_wp_data_bridge_import', [self::class, 'handle_ajax_import']);
         add_action('wp_ajax_wp_data_bridge_validate_import', [self::class, 'handle_ajax_validate_import']);
-        add_action('wp_ajax_wp_data_bridge_import_preview', [self::class, 'handle_ajax_import_preview']);
+        add_action('wp_ajax_wp_data_bridge_check_file', [self::class, 'handle_ajax_check_file']);
     }
 
     public static function handle_ajax_import(): void
@@ -438,53 +438,119 @@ class WP_Data_Bridge_Admin
         }
     }
 
-    public static function handle_ajax_import_preview(): void
+    public static function handle_ajax_check_file(): void
     {
-        // Debug logging
-        error_log('WP Data Bridge: Import preview handler called');
-        error_log('WP Data Bridge: FILES = ' . print_r($_FILES, true));
-        error_log('WP Data Bridge: POST = ' . print_r($_POST, true));
-
-        try {
-            check_ajax_referer('wp_data_bridge_import', 'nonce');
-        } catch (Exception $e) {
-            error_log('WP Data Bridge: Nonce check failed: ' . $e->getMessage());
-            wp_send_json_error(__('Nonce verification failed.', 'wp-data-bridge'));
-        }
+        check_ajax_referer('wp_data_bridge_import', 'nonce');
 
         if (!current_user_can(is_multisite() ? 'manage_network_options' : 'manage_options')) {
-            error_log('WP Data Bridge: Insufficient permissions');
             wp_send_json_error(__('Insufficient permissions.', 'wp-data-bridge'));
         }
 
-        if (!isset($_FILES['csv_file'])) {
-            error_log('WP Data Bridge: No csv_file in $_FILES');
-            wp_send_json_error(__('No CSV file uploaded.', 'wp-data-bridge'));
-        }
-
-        if ($_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-            error_log('WP Data Bridge: File upload error: ' . $_FILES['csv_file']['error']);
-            wp_send_json_error(__('File upload error.', 'wp-data-bridge'));
+        if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+            wp_send_json_error(__('No valid CSV file uploaded.', 'wp-data-bridge'));
         }
 
         try {
             $importer = new WP_Data_Bridge_Importer();
             $uploaded_file = $_FILES['csv_file']['tmp_name'];
 
-            // Parse CSV and get first few rows for preview
+            // Parse and validate CSV
             $csv_data = $importer->parse_csv_file($uploaded_file);
-            $headers = array_shift($csv_data);
 
-            // Get first 5 rows for preview
-            $preview_rows = array_slice($csv_data, 0, 5);
+            if (empty($csv_data)) {
+                wp_send_json_error(__('CSV file is empty or invalid.', 'wp-data-bridge'));
+            }
+
+            // Detect import type
+            $headers = $csv_data[0];
+            $import_type = 'posts'; // Default
+            if (in_array('Username', $headers)) {
+                $import_type = 'users';
+            } elseif (in_array('Image URL', $headers)) {
+                $import_type = 'images';
+            }
+
+            // Validate structure
+            $validation = $importer->validate_csv_structure($csv_data, $import_type);
+
+            if (!$validation['valid']) {
+                wp_send_json_error($validation['message']);
+            }
+
+            // Analyze file contents
+            $analysis = self::analyze_csv_file($csv_data, $import_type);
 
             wp_send_json_success([
+                'valid' => true,
+                'import_type' => $import_type,
+                'total_records' => count($csv_data) - 1, // Exclude header
                 'headers' => $headers,
-                'preview_rows' => $preview_rows,
-                'total_rows' => count($csv_data)
+                'analysis' => $analysis,
+                'file_size' => self::format_file_size(filesize($uploaded_file)),
+                'message' => __('File validation completed successfully!', 'wp-data-bridge')
             ]);
         } catch (Exception $e) {
-            wp_send_json_error(__('Preview failed: ', 'wp-data-bridge') . $e->getMessage());
+            wp_send_json_error(__('File check failed: ', 'wp-data-bridge') . $e->getMessage());
         }
+    }
+
+    private static function analyze_csv_file(array $csv_data, string $import_type): array
+    {
+        $headers = array_shift($csv_data); // Remove headers for analysis
+        $analysis = [
+            'total_rows' => count($csv_data),
+            'has_warnings' => false,
+            'warnings' => [],
+            'summary' => []
+        ];
+
+        if ($import_type === 'posts') {
+            // Analyze post types
+            $post_type_column = array_search('Post Type', $headers);
+            if ($post_type_column !== false) {
+                $post_types = array_filter(array_unique(array_column($csv_data, $post_type_column)));
+                $missing_post_types = [];
+                $existing_post_types = [];
+
+                foreach ($post_types as $post_type) {
+                    if (!empty($post_type)) {
+                        if (post_type_exists($post_type)) {
+                            $existing_post_types[] = $post_type;
+                        } else {
+                            $missing_post_types[] = $post_type;
+                        }
+                    }
+                }
+
+                $analysis['summary']['post_types'] = [
+                    'existing' => $existing_post_types,
+                    'missing' => $missing_post_types
+                ];
+
+                if (!empty($missing_post_types)) {
+                    $analysis['has_warnings'] = true;
+                    $analysis['warnings'][] = sprintf(
+                        __('Missing post types: %s', 'wp-data-bridge'),
+                        implode(', ', $missing_post_types)
+                    );
+                }
+            }
+
+            // Analyze post statuses
+            $status_column = array_search('Post Status', $headers);
+            if ($status_column !== false) {
+                $statuses = array_filter(array_unique(array_column($csv_data, $status_column)));
+                $analysis['summary']['post_statuses'] = $statuses;
+            }
+        } elseif ($import_type === 'users') {
+            // Analyze user roles
+            $role_column = array_search('User Role', $headers);
+            if ($role_column !== false) {
+                $roles = array_filter(array_unique(array_column($csv_data, $role_column)));
+                $analysis['summary']['user_roles'] = $roles;
+            }
+        }
+
+        return $analysis;
     }
 }

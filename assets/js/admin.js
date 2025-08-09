@@ -23,7 +23,7 @@
 
 			// Import events
 			$("#csv_file").on("change", this.onFileSelect.bind(this));
-			$("#preview-import-btn").on("click", this.onPreviewImport.bind(this));
+			$("#check-file-btn").on("click", this.onCheckFile.bind(this));
 			$("#start-import-btn").on("click", this.onStartImport.bind(this));
 
 			// File drag and drop
@@ -422,10 +422,10 @@
 						this.formatFileSize(file.size) +
 						")",
 				);
-			$("#preview-import-btn").prop("disabled", false);
+			$("#check-file-btn").prop("disabled", false);
 		},
 
-		onPreviewImport(e) {
+		onCheckFile(e) {
 			e.preventDefault();
 
 			// Validate file is selected
@@ -436,7 +436,7 @@
 			}
 
 			const formData = new FormData($("#wp-data-bridge-import-form")[0]);
-			formData.append("action", "wp_data_bridge_import_preview");
+			formData.append("action", "wp_data_bridge_check_file");
 
 			// Get the import nonce from the form
 			const importNonce = $("#wp_data_bridge_import_nonce").val();
@@ -448,17 +448,8 @@
 			}
 			formData.append("nonce", importNonce);
 
-			// Debug: Log FormData contents
-			console.log("FormData contents:", {
-				hasFile: formData.has("csv_file"),
-				hasNonce: formData.has("nonce"),
-				hasAction: formData.has("action"),
-				fileName: csvFile.name,
-				fileSize: csvFile.size,
-			});
-
 			$("#import-spinner").addClass("is-active");
-			$("#preview-import-btn").prop("disabled", true);
+			$("#check-file-btn").prop("disabled", true);
 
 			$.ajax({
 				url: wpDataBridge.ajaxUrl,
@@ -468,20 +459,20 @@
 				contentType: false,
 				success: (response) => {
 					if (response.success) {
-						this.showImportPreview(response.data);
+						this.showFileCheckResults(response.data);
 						$("#start-import-btn").prop("disabled", false);
 					} else {
-						this.showImportError(response.data || "Preview failed");
+						this.showImportError(response.data || "File check failed");
 					}
 				},
 				error: (xhr, status, error) => {
-					console.error("Preview AJAX Error:", {
+					console.error("File Check AJAX Error:", {
 						status: xhr.status,
 						statusText: xhr.statusText,
 						responseText: xhr.responseText,
 						error: error,
 					});
-					let errorMessage = "Network error during preview";
+					let errorMessage = "Network error during file check";
 					if (xhr.responseText) {
 						try {
 							const response = JSON.parse(xhr.responseText);
@@ -496,7 +487,7 @@
 				},
 				complete: () => {
 					$("#import-spinner").removeClass("is-active");
-					$("#preview-import-btn").prop("disabled", false);
+					$("#check-file-btn").prop("disabled", false);
 				},
 			});
 		},
@@ -562,40 +553,74 @@
 			return true;
 		},
 
-		showImportPreview(data) {
-			const container = $("#preview-content");
+		showFileCheckResults(data) {
+			const container = $("#check-content");
 			let html = `
-				<div class="import-preview-summary">
-					<p><strong>Headers:</strong> ${data.headers.join(", ")}</p>
-					<p><strong>Total Rows:</strong> ${this.formatNumber(data.total_rows)}</p>
+				<div class="file-check-summary">
+					<div class="check-result ${data.valid ? 'success' : 'error'}">
+						<span class="dashicons ${data.valid ? 'dashicons-yes-alt' : 'dashicons-dismiss'}"></span>
+						${data.message}
+					</div>
+					<div class="file-info">
+						<p><strong>Import Type:</strong> ${data.import_type}</p>
+						<p><strong>Total Records:</strong> ${this.formatNumber(data.total_records)}</p>
+						<p><strong>File Size:</strong> ${data.file_size}</p>
+						<p><strong>Headers:</strong> ${data.headers.join(", ")}</p>
+					</div>
 				</div>
 			`;
 
-			if (data.preview_rows && data.preview_rows.length > 0) {
-				html += '<div class="import-preview-table">';
-				html += '<table class="widefat striped">';
-				html += "<thead><tr>";
-				data.headers.forEach((header) => {
-					html += "<th>" + header + "</th>";
-				});
-				html += "</tr></thead><tbody>";
-
-				data.preview_rows.forEach((row) => {
-					html += "<tr>";
-					row.forEach((cell) => {
-						const cellContent = cell
-							? String(cell).substring(0, 50) + (cell.length > 50 ? "..." : "")
-							: "";
-						html += "<td>" + cellContent + "</td>";
+			if (data.analysis) {
+				html += '<div class="file-analysis">';
+				html += '<h4>File Analysis</h4>';
+				
+				if (data.analysis.has_warnings && data.analysis.warnings.length > 0) {
+					html += '<div class="analysis-warnings">';
+					html += '<h5><span class="dashicons dashicons-warning"></span> Warnings</h5>';
+					html += '<ul>';
+					data.analysis.warnings.forEach(warning => {
+						html += `<li>${warning}</li>`;
 					});
-					html += "</tr>";
-				});
+					html += '</ul>';
+					html += '</div>';
+				}
 
-				html += "</tbody></table></div>";
+				if (data.analysis.summary) {
+					html += '<div class="analysis-summary">';
+					html += '<h5>Content Summary</h5>';
+					
+					if (data.analysis.summary.post_types) {
+						html += '<div class="summary-item">';
+						html += '<strong>Post Types:</strong><br>';
+						if (data.analysis.summary.post_types.existing.length > 0) {
+							html += '<span class="existing-types">✓ ' + data.analysis.summary.post_types.existing.join(', ') + '</span><br>';
+						}
+						if (data.analysis.summary.post_types.missing.length > 0) {
+							html += '<span class="missing-types">✗ ' + data.analysis.summary.post_types.missing.join(', ') + ' (missing)</span>';
+						}
+						html += '</div>';
+					}
+
+					if (data.analysis.summary.post_statuses) {
+						html += '<div class="summary-item">';
+						html += '<strong>Post Statuses:</strong> ' + data.analysis.summary.post_statuses.join(', ');
+						html += '</div>';
+					}
+
+					if (data.analysis.summary.user_roles) {
+						html += '<div class="summary-item">';
+						html += '<strong>User Roles:</strong> ' + data.analysis.summary.user_roles.join(', ');
+						html += '</div>';
+					}
+
+					html += '</div>';
+				}
+
+				html += '</div>';
 			}
 
 			container.html(html);
-			$("#import-preview").show();
+			$("#file-check-results").show();
 		},
 
 		showImportProgress() {

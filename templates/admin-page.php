@@ -277,15 +277,15 @@ $is_multisite = is_multisite();
                 </table>
 
                 <div class="wp-data-bridge-actions">
-                    <?php submit_button(__('Preview Import', 'wp-data-bridge'), 'secondary', 'preview_import', false, ['id' => 'preview-import-btn']); ?>
+                    <?php submit_button(__('Check File', 'wp-data-bridge'), 'secondary', 'check_file', false, ['id' => 'check-file-btn']); ?>
                     <?php submit_button(__('Start Import', 'wp-data-bridge'), 'primary', 'start_import', false, ['id' => 'start-import-btn', 'disabled' => 'disabled']); ?>
                     <span class="spinner" id="import-spinner"></span>
                 </div>
             </form>
 
-            <div id="import-preview" class="wp-data-bridge-preview" style="display: none;">
-                <h3><?php esc_html_e('Import Preview', 'wp-data-bridge'); ?></h3>
-                <div id="preview-content"></div>
+            <div id="file-check-results" class="wp-data-bridge-check-results" style="display: none;">
+                <h3><?php esc_html_e('File Check Results', 'wp-data-bridge'); ?></h3>
+                <div id="check-content"></div>
             </div>
 
             <div id="import-progress" class="wp-data-bridge-progress" style="display: none;">
