@@ -98,6 +98,7 @@ class WP_Data_Bridge_Exporter
                     'post_author_name' => $author ? $author->display_name : '',
                     'post_date' => $post->post_date,
                     'post_modified' => $post->post_modified,
+                    'post_url' => get_permalink($post->ID),
                     'featured_image_id' => $featured_image_id,
                     'featured_image_url' => $featured_image_url,
                     'categories' => implode(', ', $categories),
