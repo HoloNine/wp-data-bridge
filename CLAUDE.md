@@ -131,8 +131,10 @@ Import Features:
 site_id, site_name, post_id, post_title, post_content, post_excerpt,
 post_status, post_type, post_author_id, post_author_name,
 post_date, post_modified, featured_image_id, featured_image_url,
-categories, tags, custom_fields, parent_id
+categories, tags, custom_fields, parent_id, seo_metadata
 ```
+
+**SEO Metadata Column**: Contains SmartCrawl Pro SEO data including title tags, meta descriptions, canonical URLs, robots directives, and other SEO settings stored as JSON-encoded data from post meta keys with `_wds_` prefix.
 
 ### Users CSV Columns
 ```

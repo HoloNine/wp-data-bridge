@@ -38,7 +38,7 @@ class WP_Data_Bridge_CSV_Generator
         // CSV Generator initialized successfully
     }
 
-    public function generate_csv(array $data, string $export_type, string $filename = null): string
+    public function generate_csv(array $data, string $export_type, ?string $filename = null): string
     {
         if (empty($data)) {
             throw new Exception(__('No data provided for export.', 'wp-data-bridge'));
@@ -90,7 +90,7 @@ class WP_Data_Bridge_CSV_Generator
         return $file_path;
     }
 
-    public function generate_multiple_csvs(array $datasets, string $base_filename = null): array
+    public function generate_multiple_csvs(array $datasets, ?string $base_filename = null): array
     {
         $generated_files = [];
 
@@ -176,7 +176,8 @@ class WP_Data_Bridge_CSV_Generator
                     'Categories',
                     'Tags',
                     'Custom Fields',
-                    'Parent ID'
+                    'Parent ID',
+                    'SEO Metadata'
                 ];
 
             case 'users':
@@ -236,7 +237,7 @@ class WP_Data_Bridge_CSV_Generator
         return $this->current_export_type ?? 'unknown';
     }
 
-    public function stream_csv_download(string $file_path, string $filename = null): void
+    public function stream_csv_download(string $file_path, ?string $filename = null): void
     {
         if (!file_exists($file_path)) {
             wp_die(__('File not found.', 'wp-data-bridge'));
@@ -372,7 +373,8 @@ class WP_Data_Bridge_CSV_Generator
                 'categories' => 'Test Category',
                 'tags' => 'test, sample',
                 'custom_fields' => '{}',
-                'parent_id' => 0
+                'parent_id' => 0,
+                'seo_metadata' => '{}'
             ]
         ];
 

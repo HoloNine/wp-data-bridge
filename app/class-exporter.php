@@ -85,6 +85,9 @@ class WP_Data_Bridge_Exporter
                     }
                 }
 
+                // Get SmartCrawl Pro SEO metadata
+                $seo_metadata = $this->get_smartcrawl_metadata($post->ID);
+
                 $posts_data[] = [
                     'site_id' => $site_id,
                     'site_name' => $site_name,
@@ -103,7 +106,8 @@ class WP_Data_Bridge_Exporter
                     'categories' => implode(', ', $categories),
                     'tags' => implode(', ', $tags),
                     'custom_fields' => json_encode($custom_fields_formatted),
-                    'parent_id' => $post->post_parent
+                    'parent_id' => $post->post_parent,
+                    'seo_metadata' => json_encode($seo_metadata)
                 ];
             }
 
@@ -218,5 +222,50 @@ class WP_Data_Bridge_Exporter
         } finally {
             $this->restore_current_blog_safely();
         }
+    }
+
+    /**
+     * Get SmartCrawl Pro SEO metadata for a post
+     * 
+     * @param int $post_id The post ID
+     * @return array SmartCrawl SEO metadata
+     */
+    private function get_smartcrawl_metadata(int $post_id): array
+    {
+        $seo_metadata = [];
+        
+        // Check if SmartCrawl Pro is active
+        if (!is_plugin_active('smartcrawl-seo/wpmu-dev-seo.php') && !is_plugin_active('wpmu-dev-seo/wpmu-dev-seo.php')) {
+            return $seo_metadata;
+        }
+
+        // Get all meta data for the post
+        $all_meta = get_post_meta($post_id);
+        
+        // SmartCrawl uses _wds_ prefix for its meta keys
+        foreach ($all_meta as $meta_key => $meta_values) {
+            if (strpos($meta_key, '_wds_') === 0) {
+                // Store the first value (meta_values is always an array)
+                $seo_metadata[$meta_key] = maybe_unserialize($meta_values[0]);
+            }
+        }
+
+        // Additional SmartCrawl specific meta keys that might not use the _wds_ prefix
+        $additional_keys = [
+            '_wds_meta-robots-nofollow',
+            '_wds_meta-robots-noindex',
+            '_wds_canonical',
+            '_wds_redirect',
+            '_wds_title',
+            '_wds_metadesc'
+        ];
+
+        foreach ($additional_keys as $key) {
+            if (isset($all_meta[$key]) && !isset($seo_metadata[$key])) {
+                $seo_metadata[$key] = maybe_unserialize($all_meta[$key][0]);
+            }
+        }
+
+        return apply_filters('wp_data_bridge_smartcrawl_metadata', $seo_metadata, $post_id);
     }
 }
