@@ -181,6 +181,28 @@ $import_options = [
   - Abort import and notify user to install required plugins
 - Log all post type validation issues for user review
 
+### SEO Metadata Conversion (SmartCrawl to Yoast)
+The plugin includes automatic SEO metadata conversion when importing:
+
+**Supported Conversions:**
+- SmartCrawl Pro `_wds_` meta keys → Yoast SEO `_yoast_wpseo_` meta keys
+- Title tags, meta descriptions, canonical URLs
+- Robots directives (noindex, nofollow, noarchive, nosnippet)
+- Focus keywords and OpenGraph data
+- Twitter Card metadata
+
+**Conversion Process:**
+1. Detects if Yoast SEO is active on target site
+2. Parses SmartCrawl SEO metadata from CSV
+3. Maps data using conversion table
+4. Handles special value formatting (booleans, arrays)
+5. Imports converted data as Yoast post meta
+
+**Conversion Filter:**
+```php
+apply_filters('wp_data_bridge_seo_conversion', $yoast_data, $smartcrawl_data, $post_id);
+```
+
 ### Import Error Handling & Notifications
 Critical scenarios to handle:
 - CSV file format errors (invalid structure, encoding issues)
@@ -190,6 +212,7 @@ Critical scenarios to handle:
 - Image download failures during import
 - Database errors during content creation
 - Memory/time limit exceeded during large imports
+- SEO plugin compatibility (Yoast SEO not active)
 
 ## Technical Requirements
 

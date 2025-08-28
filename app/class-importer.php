@@ -421,6 +421,10 @@ class WP_Data_Bridge_Importer {
     }
     
     private function import_post_metadata(int $post_id, array $row, array $column_map, array $options): void {
+        // Import SEO metadata first (SmartCrawl to Yoast conversion)
+        if (isset($column_map['SEO Metadata']) && !empty($row[$column_map['SEO Metadata']])) {
+            $this->import_seo_metadata($post_id, $row[$column_map['SEO Metadata']], $options);
+        }
         // Import categories
         if (isset($column_map['Categories']) && !empty($row[$column_map['Categories']])) {
             $categories = explode(', ', $row[$column_map['Categories']]);
@@ -509,5 +513,150 @@ class WP_Data_Bridge_Importer {
         if (!is_wp_error($image_id)) {
             set_post_thumbnail($post_id, $image_id);
         }
+    }
+
+    /**
+     * Import SEO metadata and convert SmartCrawl Pro data to Yoast SEO format
+     * 
+     * @param int $post_id The post ID
+     * @param string $seo_metadata_json JSON string containing SmartCrawl Pro SEO data
+     * @param array $options Import options
+     */
+    private function import_seo_metadata(int $post_id, string $seo_metadata_json, array $options): void {
+        // Check if Yoast SEO is active
+        if (!$this->is_yoast_seo_active()) {
+            error_log("WP Data Bridge: Yoast SEO not active, skipping SEO metadata import for post {$post_id}");
+            return;
+        }
+
+        // Decode SmartCrawl SEO metadata
+        $smartcrawl_data = json_decode($seo_metadata_json, true);
+        if (!is_array($smartcrawl_data) || empty($smartcrawl_data)) {
+            error_log("WP Data Bridge: Invalid or empty SEO metadata for post {$post_id}");
+            return;
+        }
+
+        // Convert SmartCrawl data to Yoast format
+        $yoast_data = $this->convert_smartcrawl_to_yoast($smartcrawl_data);
+        
+        // Apply conversion filter
+        $yoast_data = apply_filters('wp_data_bridge_seo_conversion', $yoast_data, $smartcrawl_data, $post_id);
+
+        // Import converted data into Yoast meta fields
+        foreach ($yoast_data as $yoast_key => $value) {
+            if (!empty($value)) {
+                update_post_meta($post_id, $yoast_key, $value);
+                error_log("WP Data Bridge: Set Yoast SEO meta {$yoast_key} for post {$post_id}");
+            }
+        }
+
+        // Log successful conversion
+        error_log("WP Data Bridge: Successfully converted and imported SEO metadata for post {$post_id}");
+    }
+
+    /**
+     * Convert SmartCrawl Pro metadata to Yoast SEO format
+     * 
+     * @param array $smartcrawl_data SmartCrawl Pro metadata
+     * @return array Converted Yoast SEO metadata
+     */
+    private function convert_smartcrawl_to_yoast(array $smartcrawl_data): array {
+        $conversion_map = $this->get_seo_conversion_map();
+        $yoast_data = [];
+
+        foreach ($conversion_map as $smartcrawl_key => $yoast_key) {
+            if (isset($smartcrawl_data[$smartcrawl_key])) {
+                $value = $smartcrawl_data[$smartcrawl_key];
+                
+                // Handle special conversions
+                $yoast_data[$yoast_key] = $this->convert_seo_value($smartcrawl_key, $value, $yoast_key);
+            }
+        }
+
+        return $yoast_data;
+    }
+
+    /**
+     * Get the conversion mapping between SmartCrawl and Yoast SEO meta keys
+     * 
+     * @return array Conversion mapping
+     */
+    private function get_seo_conversion_map(): array {
+        return [
+            // Basic SEO fields
+            '_wds_title' => '_yoast_wpseo_title',
+            '_wds_metadesc' => '_yoast_wpseo_metadesc',
+            '_wds_canonical' => '_yoast_wpseo_canonical',
+            '_wds_redirect' => '_yoast_wpseo_redirect',
+            
+            // Robots meta tags
+            '_wds_meta-robots-noindex' => '_yoast_wpseo_meta-robots-noindex',
+            '_wds_meta-robots-nofollow' => '_yoast_wpseo_meta-robots-nofollow',
+            '_wds_meta-robots-noarchive' => '_yoast_wpseo_meta-robots-adv',
+            '_wds_meta-robots-nosnippet' => '_yoast_wpseo_meta-robots-adv',
+            
+            // Focus keyword (map to Yoast focus keyword)
+            '_wds_focus-keywords' => '_yoast_wpseo_focuskw',
+            '_wds_keywords' => '_yoast_wpseo_focuskw',
+            
+            // OpenGraph and social
+            '_wds_opengraph-title' => '_yoast_wpseo_opengraph-title',
+            '_wds_opengraph-description' => '_yoast_wpseo_opengraph-description',
+            '_wds_opengraph-images' => '_yoast_wpseo_opengraph-image',
+            '_wds_twitter-title' => '_yoast_wpseo_twitter-title',
+            '_wds_twitter-description' => '_yoast_wpseo_twitter-description',
+        ];
+    }
+
+    /**
+     * Convert individual SEO values with special handling
+     * 
+     * @param string $smartcrawl_key Original SmartCrawl key
+     * @param mixed $value The value to convert
+     * @param string $yoast_key Target Yoast key
+     * @return mixed Converted value
+     */
+    private function convert_seo_value(string $smartcrawl_key, $value, string $yoast_key): string {
+        // Handle robot meta tags - convert to Yoast format
+        if (strpos($yoast_key, 'meta-robots') !== false) {
+            // Convert boolean/string values to Yoast format
+            if ($value === true || $value === '1' || $value === 'true') {
+                return '1';
+            } elseif ($value === false || $value === '0' || $value === 'false') {
+                return '0';
+            }
+            return (string) $value;
+        }
+
+        // Handle focus keywords - take first keyword if multiple
+        if ($yoast_key === '_yoast_wpseo_focuskw') {
+            if (is_array($value)) {
+                return !empty($value) ? (string) $value[0] : '';
+            } elseif (is_string($value)) {
+                $keywords = explode(',', $value);
+                return !empty($keywords) ? trim($keywords[0]) : '';
+            }
+        }
+
+        // Handle OpenGraph images - take first image if multiple
+        if ($yoast_key === '_yoast_wpseo_opengraph-image') {
+            if (is_array($value)) {
+                return !empty($value) ? (string) $value[0] : '';
+            }
+        }
+
+        // Default: convert to string
+        return (string) $value;
+    }
+
+    /**
+     * Check if Yoast SEO plugin is active
+     * 
+     * @return bool True if Yoast SEO is active
+     */
+    private function is_yoast_seo_active(): bool {
+        return is_plugin_active('wordpress-seo/wp-seo.php') || 
+               is_plugin_active('wordpress-seo-premium/wp-seo-premium.php') ||
+               class_exists('WPSEO_Options');
     }
 }
